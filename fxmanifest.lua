@@ -3,7 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 author 'SUP2Ak'
-version '0.1'
+version '0.2'
 link 'https://github.com/SUP2Ak/supv_entitytool'
 
 description 'a nice tool'

@@ -24,42 +24,46 @@ local IsControlPressed <const> = IsControlPressed
 local inTool, entity, model, name, WebhookUrl = {}, nil, nil, nil, nil
 local entityObj1, entityObj2 = nil, nil
 local _coord, _rot, _on = {0.0,0.0,0.0}, {0.0,0.0,0.0}, 0
-local _indexRot, _indexCoord, inIteration, _speed = 1, 1, false, 1
+local _indexRot, _indexCoord, inIteration, _speed, _boneIndex = 1, 1, false, 1, 1
 
-local function SendToWebhook(embed)
-    if WebhookUrl then supv.webhook.embed(WebhookUrl, embed, 'supv_entitytool', nil) end
+local function SendToWebhook(title, desc)
+    if WebhookUrl then supv.webhook.embed(WebhookUrl, {title = title, description = desc}, 'supv_entitytool', nil) end
 end
 
 local function Iteration()
     inIteration = true
+    local sleep
     CreateThread(function()
         while inIteration do
-            Wait(0)
+            sleep = 10
             if IsControlPressed(0, 190) then -- right
-                if _on == 4 then -- coords
-                    _coord[_indexCoord] += (0.01*_speed)
-                elseif _on == 6 then -- rot
+                sleep = 5
+                if _on == 6 then -- coords
+                    _coord[_indexCoord] += (0.001*_speed)
+                elseif _on == 8 then -- rot
                     _rot[_indexRot] += (0.1*_speed)
                 end
                 entityObj1:attach(entityObj2.entity, {coords = _coord, rot = _rot})
             elseif IsControlPressed(0, 189) then -- left
-                if _on == 4 then -- coords
-                    _coord[_indexCoord] -= (0.01*_speed)                    
-                elseif _on == 6 then -- rot
+                sleep = 5
+                if _on == 6 then -- coords
+                    _coord[_indexCoord] -= (0.001*_speed)                    
+                elseif _on == 8 then -- rot
                     _rot[_indexRot] -= (0.1*_speed)
                 end
                 entityObj1:attach(entityObj2.entity, {coords = _coord, rot = _rot})
             end
+            Wait(sleep)
         end
     end)
 end
 
 -- Attach menu
-local function AttachEntityMenu(alreadyOpen)
+local function AttachEntityMenu(alreadyOpen, ...)
     local canSkip = alreadyOpen or false
     lib.hideTextUI()
     if not canSkip then 
-        local boneList, BoneValue, BoneArgs = entityObj1.boneList, {}, {}
+        local boneList, BoneValue, BoneArgs, canReset = entityObj1.boneList, {}, {}, true
         _coord, _rot, _on, _speed = {0.0,0.0,0.0}, {0.0,0.0,0.0}, 0, 1
 
         for i = 1, #boneList do
@@ -70,31 +74,30 @@ local function AttachEntityMenu(alreadyOpen)
         local buttons = { -- a faire re agencer les boutons
             {label = 'AttachEntity', checked = true}, --1 ok
             {label = 'SwapEntity'}, --2 ok
-            -- mettre Speed
-            -- mettre Bone
-            {label = 'Coords', values = {'x', 'y', 'z'}, args = {1, 2, 3}, close = false}, --3
-            {label = 'Iter coords', icon = 'arrows-left-right', close = false}, --4
-            {label = 'Rot', values = {'x', 'y', 'z'}, args = {1, 2, 3}, close = false}, --5
-            {label = 'Iter rot', icon = 'arrows-left-right', close = false}, --6
-            {label = 'Bone List', values = BoneValue, args = BoneArgs, close = false}, --7 --
-            {label = 'Speed', values = {'1', '2', '3', '5', '10', '100'}, args = {1, 2, 3, 5, 10, 100}} --8 --
-            -- mettre copy to clipboard
-            -- mettre copy to clipboard code with attach (getcoordoffset before attach)
-            -- send to discord (webhook)
+            {label = 'Speed', values = {'1', '2', '3', '5', '10', '100'}, args = {1, 2, 3, 5, 10, 100}, close = false}, --3
+            {label = 'Bone List', values = BoneValue, args = BoneArgs}, --4
+            {label = 'Coords', values = {'x', 'y', 'z'}, args = {1, 2, 3}, close = false}, --5
+            {label = 'Iter coords', icon = 'arrows-left-right', values = {'-/+'}, close = false}, --6
+            {label = 'Rot', values = {'x', 'y', 'z'}, args = {1, 2, 3}, close = false}, --7
+            {label = 'Iter rot', icon = 'arrows-left-right', values = {'-/+'}, close = false}, --8
+            {label = 'Reset', description = 'Reset all setting after settings', checked = canReset}, --9
+            {label = 'Copy to clipboard', close = true}, --10
         }
+        if WebhookUrl then lib.setMenuOptions('attach_menu', {label = 'Copy to discord'}, 11) end
     
         lib.registerMenu({
             id = 'attach_menu',
             title = 'supv_entityTool',
             position = 'top-left',
             onSideScroll = function(selected, scrollIndex, args)
-                if selected == 3 then
+                if selected == 5 then
                     _indexCoord = args[scrollIndex]
-                elseif selected == 5 then
-                    _indexRot = args[scrollIndex]
                 elseif selected == 7 then
+                    _indexRot = args[scrollIndex]
+                elseif selected == 4 then
                     entityObj1:attach(entityObj2.entity, {bone = args[scrollIndex]})
-                elseif selected == 8 then
+                    _boneIndex = scrollIndex
+                elseif selected == 3 then
                     _speed = args[scrollIndex]
                 end
             end,
@@ -108,10 +111,14 @@ local function AttachEntityMenu(alreadyOpen)
             onCheck = function(selected, checked, args)
                 if selected == 1 then
                     if checked then entityObj1:attach(entityObj2.entity, {coords = _coord, rot = _rot}) else entityObj1:detach() entityObj2:detach() end
+                elseif selected == 9 then canReset = checked
                 end
             end,
             onClose = function(keyPressed)
                 inIteration = false
+                entityObj1:detach() entityObj2:detach()
+                Wait(250)
+                if canReset then entityObj1:reset() entityObj2:reset() end
                 entityObj1, entityObj2 = entityObj1:unSelect(), entityObj2:unSelect()
             end,
             options = buttons
@@ -126,8 +133,50 @@ local function AttachEntityMenu(alreadyOpen)
                     entityObj1, entityObj2 = supv.tool.selectEntity(inTool[1].entity), supv.tool.selectEntity(inTool[2].entity)
                     AttachEntityMenu()
                 end
+            elseif selected == 4 then
+                local options = {} for i = 1, #boneList do options[i] = {value = boneList[i].index, label = boneList[i].label} end
+                local input = lib.inputDialog('Bone List', {
+                    {type = 'select', label = 'Select bone', options = options}
+                })
+
+                if input then
+                    local value = tonumber(input[1]) or input[1]
+                    entityObj1:attach(entityObj2.entity, {bone = value})
+                    Wait(250)
+                    AttachEntityMenu('bone', value)
+                else
+                    Wait(250)
+                    AttachEntityMenu(true)
+                end
+            elseif selected == 10 then -- clipboard
+                local message = ("--[[\nEntity 1: %s - %s\nEntity 2: %s - %s\nBone: %s - %s\nCoords: {%s,%s,%s}\nRot: {%s,%s,%s}\n%s\n--]]"):format(GetEntityArchetypeName(entityObj1.entity), entityObj1.model, GetEntityArchetypeName(entityObj2.entity), entityObj2.model, BoneValue[_boneIndex], BoneArgs[_boneIndex], _coord[1], _coord[2], _coord[3], _rot[1], _rot[2], _rot[3], entityObj1.native)
+                SendNUIMessage({
+                    type = 'copy',
+                    data = message
+                })
+                Wait(250)
+                AttachEntityMenu(true)
+            elseif selected == 11 then -- discord
+                local input = lib.inputDialog('Webhook', {
+                    {type = 'input', label = 'Title'}
+                })
+                if input then
+                    local message = ("Entity 1: %s - %s\nEntity 2: %s - %s\nBone: %s - %s\nCoords: {%s,%s,%s}\nRot: {%s,%s,%s}\n%s"):format(GetEntityArchetypeName(entityObj1.entity), entityObj1.model, GetEntityArchetypeName(entityObj2.entity), entityObj2.model, BoneValue[_boneIndex], BoneArgs[_boneIndex], _coord[1], _coord[2], _coord[3], _rot[1], _rot[2], _rot[3], entityObj1.native)
+                    SendToWebhook(input[1] or 'Your settings', message)
+                    AttachEntityMenu(true)
+                else 
+                    AttachEntityMenu(true)
+                end
             end
         end)
+    elseif canSkip == 'bone' then
+        local boneList, BoneValue, BoneArgs = entityObj1.boneList, {}, {}
+        for i = 1, #boneList do
+            BoneValue[i] = boneList[i].label
+            BoneArgs[i] = boneList[i].index
+            if boneList[i].index == ... then _boneIndex = i end
+        end
+        lib.setMenuOptions('attach_menu', {label = 'Bone List', values = BoneValue, args = BoneArgs, defaultIndex = _boneIndex}, 4)
     end
     lib.showMenu('attach_menu')
     Iteration()
@@ -258,7 +307,8 @@ lib.registerMenu(
             {label = 'wip', description = 'Setting on your player'}, --2
             -- Command tool
             {label = 'Delete Entity', description = 'Delete entity in the map'}, --3
-            {label = 'Spawn', values = {'car', 'ped', 'object'}, description = 'Spawn Car, Ped or Object', defaultIndex = 1} --4       
+            {label = 'Spawn', values = {'car', 'ped', 'object'}, description = 'Spawn Car, Ped or Object', defaultIndex = 1}, --4 
+            {label = 'ClearArea'} --5
         }
     }, 
     function(selected, scrollIndex, args)
@@ -273,6 +323,7 @@ lib.registerMenu(
             if scrollIndex == 1 then -- car
                 local input = lib.inputDialog('Spawn car', {
                     {type = 'input', label = 'String of car', placeholder = 't20'},
+                    {type = 'checkbox', label = 'Re-open menu', checked = false},
                 })
         
                 if input then
@@ -282,6 +333,10 @@ lib.registerMenu(
                     supv.vehicle.spawnLocal(input[1], newCoords, function(vehicle)
                         SetPedIntoVehicle(PlayerPedId(), vehicle, -1)
                     end)
+                    if input[2] then
+                        Wait(250)
+                        lib.showMenu('main_menu')
+                    end
                 else
                     lib.showMenu('main_menu') 
                 end
@@ -294,7 +349,8 @@ lib.registerMenu(
                     {type = 'input', label = 'Ammo (number)', placeholder = '200'}, --5
                     {type = 'checkbox', label = 'BlockEvent', checked = true}, --6
                     {type = 'checkbox', label = 'GodMode', checked = true}, --7
-                    {type = 'checkbox', label = 'Freeze', checked = true} --8
+                    {type = 'checkbox', label = 'Freeze', checked = true}, --8
+                    {type = 'checkbox', label = 'Re-open menu', checked = false},
                 })
         
                 if input then
@@ -307,6 +363,10 @@ lib.registerMenu(
                         godmode = input[7],
                         variation = var,
                     }, {hash = weapon or ``, ammo = tonumber(input[5]) or 0, visible = weapon ~= nil and true or false})
+                    if input[9] then
+                        Wait(250)
+                        lib.showMenu('main_menu')
+                    end
                 else
                     lib.showMenu('main_menu') 
                 end
@@ -314,7 +374,8 @@ lib.registerMenu(
                 local input = lib.inputDialog('Spawn object', {
                     {type = 'input', label = 'String of object', placeholder = 'prop_cs_burger_01'},
                     {type = 'checkbox', label = 'zGround', checked = true},
-                    {type = 'checkbox', label = 'Freeze', checked = true}
+                    {type = 'checkbox', label = 'Freeze', checked = true},
+                    {type = 'checkbox', label = 'Re-open menu', checked = false},
                 })
         
                 if input then
@@ -323,21 +384,39 @@ lib.registerMenu(
                         if input[2] then FreezeEntityPosition(obj, true) end
                         if input[3] then PlaceObjectOnGroundProperly(obj) end
                     end)
+                    if input[4] then
+                        Wait(250)
+                        lib.showMenu('main_menu')
+                    end
                 else
                     lib.showMenu('main_menu')
                 end
+            end
+        elseif selected == 5 then
+            local input = lib.inputDialog('Clear area', {
+                {type = 'checkbox', label = 'Re-open menu', checked = true},
+                {type = 'input', label = 'Radius', placeholder = '1.0'},
+                {type = 'checkbox', label = 'Ignore cop cars', checked = false},
+                {type = 'checkbox', label = 'Ignore object', checked = false},
+            })
+
+            if input then
+                local playerCoords = GetEntityCoords(PlayerPedId())
+                local radius = tonumber(input[2])
+                if math.type(radius) == 'integer' then radius = tonumber(tostring(radius..'.0')) end
+                ClearArea(playerCoords.xyz, radius, true, input[3], input[4], false)
+                if input[1] then
+                    Wait(250)
+                    lib.showMenu('main_menu')
+                end
+            else
+                lib.showMenu('main_menu')
             end
         end
     end
 )
 
-RegisterNetEvent('supv_entityTool:client:openMenu', function(webhookUrl)
-    WebhookUrl = webhookUrl
+RegisterNetEvent('supv_entityTool:client:openMenu', function(url)
+    WebhookUrl = url
     lib.showMenu('main_menu') 
 end)
-
-RegisterCommand('debug:detach', function()
-    if entityObj1 and entityObj2 then entityObj1:detach() entityObj2:detach() end
-end)
-
---supv.webhook.embed(WebhookUrl, embed, bot_name, avatar)

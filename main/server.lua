@@ -21,5 +21,4 @@ else
     end, {})
 end
 
-
 supv.version.check("https://raw.githubusercontent.com/SUP2Ak/supv_entitytool/main/fxmanifest.lua", nil, nil, 'lua', 'https://github.com/SUP2Ak/supv_entitytool', Config.SelectedLanguage)
